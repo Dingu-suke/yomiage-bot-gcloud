@@ -215,6 +215,34 @@ async def leave(interaction: discord.Interaction):
 
 
 @bot.event
+async def on_voice_state_update(
+    member: discord.Member,
+    before: discord.VoiceState,
+    after: discord.VoiceState,
+):
+    if member.bot:
+        return
+    vc = member.guild.voice_client
+    if not vc or not vc.is_connected():
+        return
+    if before.channel == after.channel:  # ミュート等の状態変化は無視
+        return
+
+    bot_channel_id = vc.channel.id
+    if after.channel and after.channel.id == bot_channel_id:
+        verb = "参戦"
+    elif before.channel and before.channel.id == bot_channel_id:
+        verb = "離脱"
+    else:
+        return
+
+    name = TextProcessor.sanitize(member.display_name) or "だれか"
+    player = manager.get(member.guild.id)
+    player.ensure_running()
+    await player.enqueue(f"{name} が{verb}しました", vc)
+
+
+@bot.event
 async def on_message(message: discord.Message):
     if message.author.bot or message.guild is None:
         return
