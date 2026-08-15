@@ -3,3 +3,4 @@ gcp-key.json
 __pycache__/
 *.pyc
 .venv/
+get-docker.sh

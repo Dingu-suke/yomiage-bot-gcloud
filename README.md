@@ -14,7 +14,8 @@ VOICEVOX 版（[../yomiage-bot](../yomiage-bot)）から派生。**合成をク�
 
 ```bash
 # 1. .env に Discord トークンを設定
-open -e .env   # DISCORD_TOKEN= の右側を書き換える
+cp .env.example .env   # 既に .env があれば不要
+nano .env              # DISCORD_TOKEN= の右側を書き換える（Mac なら open -e .env）
 
 # 2. GCP サービスアカウント鍵 JSON を gcp-key.json として配置(下記 §2 参照)
 
@@ -126,6 +127,30 @@ docker compose up -d --force-recreate bot   # .env を読み直して再起動
 
 > ⚠️ **`docker compose restart` では `.env` の変更が反映されない**。`.env` を編集したら必ず `up -d --force-recreate` を使うこと。
 
+### 常駐運用（ラズパイ / 再起動後の自動復帰）
+
+`docker-compose.yml` の `restart: unless-stopped` と、Docker 自体の自動起動の
+2 つが揃っていれば、**ホストを再起動しても Bot は自動で復帰する**。
+
+```bash
+sudo systemctl enable --now docker   # Docker をホスト起動時に自動起動（初回だけ）
+docker compose up --build -d         # 一度起動しておけば以後は自動復帰
+```
+
+確認:
+
+```bash
+systemctl is-enabled docker          # → enabled
+docker inspect -f '{{.HostConfig.RestartPolicy.Name}}' yomiage-bot   # → unless-stopped
+```
+
+- `docker compose down` / `stop` で**手動停止した場合は再起動後も起動しない**（`unless-stopped` の仕様）。
+  再び常駐させるには `docker compose up -d` を実行する。
+- ログは 10MB × 3 世代でローテーションされる（SD カード保護のため `logging` で設定済み）。
+
+> 別の Bot（`discord-todo-bot`）は systemd サービスで常駐しているが、こちらは Docker の
+> 再起動ポリシーが同じ役割を果たすので、systemd unit を別途作る必要はない。
+
 ---
 
 ## 6. Discord での使い方
@@ -175,6 +200,7 @@ GCP TTS の無料枠（毎月）:
 |------|------|
 | `env file ... .env not found` | プロジェクト直下に `.env` を作成 |
 | `gcp-key.json` を mount できない | プロジェクト直下に `gcp-key.json` を配置（GCP コンソールから DL） |
+| `gcp-key.json` が**ディレクトリ**になっている | 鍵を置く前に `up` すると Docker が空ディレクトリを作る。`rm -rf gcp-key.json` してから鍵 JSON を配置し直し、`up -d --force-recreate` |
 | `google.auth.exceptions.DefaultCredentialsError` | `gcp-key.json` のパスや権限、`docker-compose.yml` の volume マウントを確認 |
 | `401 Unauthorized` / `Improper token has been passed` | Discord トークンを `.env` に正しく設定し、`docker compose up -d --force-recreate bot` で再起動 |
 | `PrivilegedIntentsRequired` | Bot タブの MESSAGE CONTENT INTENT を ON |
